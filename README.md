@@ -22,8 +22,8 @@ Put your `{{domain}}` into ansible inventory.
 
 Setup environment for convinience
 
-    export NODE=t1.lattenwald.org
-    export VARS=vars.t1.yaml
+    export NODE={{domain}}
+    export VARS=vars.yaml
 
 First run create user playbook
 
