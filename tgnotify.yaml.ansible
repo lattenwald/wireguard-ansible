@@ -1,0 +1,36 @@
+- name: tgnotify
+  hosts: all
+  become_method: sudo
+
+  tasks:
+    - name: install tgnotify
+      become: yes
+      template:
+        src: files/tgnotify.tmpl
+        dest: /usr/local/bin/tgnotify
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: install onfailure script
+      become: yes
+      copy:
+        src: files/onfailure-tg.sh
+        dest: /usr/local/bin/onfailure-tg.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: install onfailure service
+      become: yes
+      copy:
+        src: files/failure-tg@.service
+        dest: /etc/systemd/system/failure-tg@.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: reload systemd
+      become: yes
+      systemd:
+        daemon-reload: true

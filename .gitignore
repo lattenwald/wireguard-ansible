@@ -1,0 +1,4 @@
+/vars*.yaml
+!/vars.example.yaml
+/files/ssh_key_*
+/inventory

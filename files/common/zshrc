@@ -1,0 +1,380 @@
+# -*- sh -*-
+
+zstyle ':completion:*' completer _expand _complete _ignored _approximate
+zstyle ':completion:*' max-errors 2 numeric
+
+# autoload -U +X compinit && compinit
+autoload -Uz compinit && compinit -i
+autoload -U +X bashcompinit && bashcompinit
+
+# stack autocompletion
+if which stack >/dev/null 2>&1; then
+    eval "$(stack --bash-completion-script "$(which stack)")"
+fi
+
+# show latest stack lts
+stack_lts() {
+    curl -v https://www.stackage.org/lts 2>&1 | grep Location | sed 's/.*\///'
+}
+
+zstyle ':completion:*:*:kill:*:processes' list-colors '=(#b) #([0-9]#)*=0=01;31'
+zstyle ':completion:*:*:kill:*:processes' command 'ps --forest -A -o pid,user,command'
+zstyle ':completion:*:processes-names' command 'ps axho command'
+
+HISTFILE=~/.histfile
+HISTSIZE=2000
+SAVEHIST=$HISTSIZE
+EDIT=nvim # emacsclient -n
+setopt APPEND_HISTORY
+setopt AUTO_CD
+setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_IGNORE_SPACE
+
+bindkey -e
+
+typeset -A key
+key[Home]=${terminfo[khome]}
+key[End]=${terminfo[kend]}
+key[Insert]=${terminfo[kich1]}
+key[Delete]=${terminfo[kdch1]}
+key[Up]=${terminfo[kcuu1]}
+key[Down]=${terminfo[kcud1]}
+key[Left]=${terminfo[kcub1]}
+key[Right]=${terminfo[kcuf1]}
+key[PageUp]=${terminfo[kpp]}
+key[PageDown]=${terminfo[knp]}
+
+# setup key accordingly
+[[ -n "${key[Home]}"     ]]  && bindkey  "${key[Home]}"     beginning-of-line
+[[ -n "${key[End]}"      ]]  && bindkey  "${key[End]}"      end-of-line
+[[ -n "${key[Insert]}"   ]]  && bindkey  "${key[Insert]}"   overwrite-mode
+[[ -n "${key[Delete]}"   ]]  && bindkey  "${key[Delete]}"   delete-char
+[[ -n "${key[Up]}"       ]]  && bindkey  "${key[Up]}"       up-line-or-history
+[[ -n "${key[Down]}"     ]]  && bindkey  "${key[Down]}"     down-line-or-history
+[[ -n "${key[Left]}"     ]]  && bindkey  "${key[Left]}"     backward-char
+[[ -n "${key[Right]}"    ]]  && bindkey  "${key[Right]}"    forward-char
+[[ -n "${key[PageUp]}"   ]]  && bindkey  "${key[PageUp]}"   beginning-of-buffer-or-history
+[[ -n "${key[PageDown]}" ]]  && bindkey  "${key[PageDown]}" end-of-buffer-or-history
+[[ -n "${key[PageUp]}"   ]]  && bindkey  "${key[PageUp]}"   history-beginning-search-backward
+[[ -n "${key[PageDown]}" ]]  && bindkey  "${key[PageDown]}" history-beginning-search-forward
+
+bindkey "[1;5D" backward-word #control left
+bindkey "[1;5C" forward-word  #control right
+
+# Finally, make sure the terminal is in application mode, when zle is
+# active. Only then are the values from $terminfo valid.
+if (( ${+terminfo[smkx]} )) && (( ${+terminfo[rmkx]} )); then
+    function zle-line-init () {
+        printf '%s' "${terminfo[smkx]}"
+    }
+    function zle-line-finish () {
+        printf '%s' "${terminfo[rmkx]}"
+    }
+    zle -N zle-line-init
+    zle -N zle-line-finish
+fi
+
+# http://grml.org/zsh/zsh-lovers.html
+zstyle ':completion:*' use-cache on
+zstyle ':completion:*' cache-path ~/.zsh/cache
+zstyle ':completion:*:(all-|)files' ignored-patterns '(|*/)CVS'
+zstyle ':completion:*:cd:*' ignored-patterns '(*/)#CVS'
+zstyle ':completion:*' squeeze-slashes true
+zstyle ':completion:*:cd:*' ignore-parents parent pwd
+
+autoload -U colors
+colors
+setopt prompt_subst
+
+# Based on http://eseth.org/2010/git-in-zsh.html
+function +vi-git-st() {
+    local ahead behind remote gitstatus stashcnt
+    stashcnt=${$(git stash list 2> /dev/null | wc -l)}
+    if [ "$stashcnt" != "0" ]; then
+        hook_com[misc]+="<$stashcnt>"
+    fi
+
+    remote=${$(git rev-parse --verify ${hook_com[branch]}@{upstream} \
+        --symbolic-full-name 2>/dev/null)/refs\/remotes\/}
+    if [[ -n ${remote} ]] ; then
+        behind=$(git rev-list HEAD..${hook_com[branch]}@{upstream} 2>/dev/null | wc -l)
+        (( $behind )) && gitstatus+="<"
+
+        ahead=$(git rev-list ${hook_com[branch]}@{upstream}..HEAD 2>/dev/null | wc -l)
+        (( $ahead )) && gitstatus+=">"
+
+        if [ -n "${gitstatus}" ]; then
+            hook_com[misc]+=$gitstatus
+        else
+            hook_com[misc]+='='
+        fi
+    fi
+}
+
+autoload -Uz vcs_info
+zstyle ':vcs_info:*+*:*' debug false
+zstyle ':vcs_info:*' enable git hg
+zstyle ':vcs_info:*' stagedstr '+'
+zstyle ':vcs_info:*' unstagedstr '*'
+zstyle ':vcs_info:*' check-for-changes on
+zstyle ':vcs_info:git*:*' get-revision true
+# zstyle ':vcs_info:*' actionformats \
+#     '%F{5}(%f%s%F{5})%F{3}-%F{5}[%F{2}%b%F{3}|%F{1}%a%F{5}]%f '
+zstyle ':vcs_info:git*' actionformats "(%s|%a) %12.12i %c%u %b%m"
+zstyle ':vcs_info:*' formats '%F{4}%s [%b%u%c%m]'
+zstyle ':vcs_info:git*+set-message:*' hooks git-st
+precmd() {
+    vcs_info
+    print -Pn "\e]0;%n@%m: %~\a"
+}
+
+function cabal_sandbox_info() {
+    cabal_files=(*.cabal(N))
+    if [ $#cabal_files -gt 0 ]; then
+        if [ -f cabal.sandbox.config ]; then
+            echo " %{$fg[green]%}[cabal]%{$reset_color%}"
+        else
+            echo " %{$fg[red]%}[cabal]%{$reset_color%}"
+        fi
+    fi
+}
+
+function wine_prefix_info() {
+    if [ -n "$WINEPREFIX" ]; then
+        echo " %{$fg[yellow]%}wine:${WINEPREFIX/#"$HOME"/"~"}%{$reset_color%}"
+    fi
+}
+
+PROMPT='$reset_color%* $fg_bold[green]%n@%m$fg_no_bold[white]:$fg_bold[blue]%~%b$(cabal_sandbox_info) ${vcs_info_msg_0_}$(wine_prefix_info)
+%f%# '
+
+if [ -x /usr/bin/dircolors ] || [ -x /bin/dircolors ]; then
+    eval "`dircolors -b`"
+    if [ `ls --version | head -1 | awk '{if ($NF > 8) print "ok"; else exit 1}'` ]; then
+      alias ls='ls --group-directories-first --color=auto'
+    else
+      alias ls='ls --color=auto'
+    fi
+    alias dir='dir --color=auto'
+    alias vdir='vdir --color=auto'
+
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+    alias watch='watch --color'
+    alias pacman='pacman --color auto'
+    alias pactree='pactree --color'
+fi
+
+alias sbtt='sbt -sbt-version 0.12.4'
+alias emacs-duplicate-packages="find -type d -depth 1 . | sed 's/-\\([0-9]\\.\\?\\)\\+\$//' | uniq -c"
+alias E='SUDO_EDITOR="emacsclient" sudo -e'
+
+alias cpr="rsync -a --human-readable --progress"
+
+alias ssh_close='ssh -O exit'
+alias scp='/usr/bin/scp -o ControlMaster=no'
+
+alias wanip='dig +short myip.opendns.com @resolver1.opendns.com'
+
+alias vim=nvim
+alias v=nvim
+
+alias colors='for COLOR in {1..255}; do echo -en "\e[38;5;${COLOR}m${COLOR} "; done; echo;'
+
+# unregister broken GHC packages. Run this a few times to resolve dependency rot in installed packages.
+# ghc-pkg-clean -f cabal/dev/packages*.conf also works.
+function ghc-pkg-clean() {
+    for p in `ghc-pkg check $* 2>&1  | grep problems | awk '{print $6}' | sed -e 's/:$//'`
+    do
+        echo unregistering $p; ghc-pkg $* unregister $p
+    done
+}
+
+# remove all installed GHC/cabal packages, leaving ~/.cabal binaries and docs in place.
+# When all else fails, use this to get out of dependency hell and start over.
+function ghc-pkg-reset() {
+    read '?erasing all your user ghc and cabal packages - are you sure (y/n) ? ' ans
+    test "x$ans" = xy && ( \
+        echo 'erasing directories under ~/.ghc'; rm -rf `find ~/.ghc -maxdepth 1 -type d`; \
+        echo 'erasing ~/.cabal/lib'; rm -rf ~/.cabal/lib; \
+        # echo 'erasing ~/.cabal/packages'; rm -rf ~/.cabal/packages; \
+        # echo 'erasing ~/.cabal/share'; rm -rf ~/.cabal/share; \
+        )
+}
+
+# show colors
+zsh_colors() {
+    for COLOR in $(seq 0 255)
+    do
+        for STYLE in "38;5"
+        do
+            TAG="\033[${STYLE};${COLOR}m"
+            STR="${STYLE};${COLOR}"
+            echo -ne "${TAG}${STR}${NONE}  "
+        done
+        echo
+    done
+}
+
+say() {
+  if [[ "${1}" =~ -[a-z]{2} ]]
+  then
+    local lang=${1#-}
+    local text="${*#$1}"
+  else
+    local lang=${LANG%_*}
+    local text="$*"
+  fi
+  mplayer "http://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&q=${text}" &> /dev/null
+}
+
+# misc
+alias ports="netstat -lptun"
+alias pp="perl -Iperl/api -Ilib"
+alias func='print -l ${(ok)functions}'
+alias storable_show="perl -MStorable -MJSON::XS -E 'say JSON::XS->new->pretty->encode(retrieve \$ARGV[0])'"
+
+# mac os
+if [[ $OSTYPE =~ '^darwin' ]]; then
+    alias ls="/usr/local/bin/gls --color=auto --group-directories-first"
+    alias sed=/usr/local/bin/gsed
+    alias du=/usr/local/bin/gdu
+    alias df=/usr/local/bin/gdf
+    alias sort=/usr/local/bin/gsort
+    alias timeout=/usr/local/bin/gtimeout
+    alias eog=open -a Xee
+    alias bubu="brew update && brew upgrade && brew-cask-upgrade.sh && brew cleanup && brew cask cleanup"
+    alias ports="lsof -iTCP -iUDP -sTCP:LISTEN -nP"
+elif [[ $OSTYPE =~ '^linux' ]]; then
+    if [[ -x "/usr/bin/auman" ]]; then
+        alias bubu="/usr/bin/auran -Syyu --noconfirm --noedit --devel"
+    elif [[ -x "/usr/bin/pacaur" ]]; then
+        alias bubu="/usr/bin/pacaur -Syyu --noconfirm --noedit --devel"
+    elif [[ -x "/usr/bin/yaourt" ]]; then
+        alias bubu="/usr/bin/yaourt -Syyua --noconfirm --devel"
+    fi
+fi
+
+## docker
+alias d="docker-compose"
+
+function drun {
+    # run function in first service from docker-compose.yml
+    service=`cat docker-compose.yml | sed "0,/^services:/d" | head -1 | sed 's/:[[:space:]]*$//;s/^[[:space:]]*//'`
+    docker-compose run $service $@
+}
+
+## git
+mergeto() {
+    from=`git symbolic-ref --short HEAD`
+    git co $* && git merge $from
+}
+
+transfer() {
+    if [ $# -eq 0 ]; then
+        echo -e "No arguments specified. Usage:\necho transfer /tmp/test.md\ncat /tmp/test.md | transfer test.md"
+        return 1
+    fi
+    tmpfile=$( mktemp -t transferXXX )
+    if tty -s; then
+        basefile=$(basename "$1" | sed -e 's/[^a-zA-Z0-9._-]/-/g')
+        curl --progress-bar --upload-file "$1" "https://transfer.sh/$basefile" >> $tmpfile
+    else
+        curl --progress-bar --upload-file "-" "https://transfer.sh/$1" >> $tmpfile
+    fi
+    cat $tmpfile
+    rm -f $tmpfile
+}
+
+# disable Ctrl+X
+stty -ixon
+
+# kerl
+# [ -r ~/kerl/20.1/activate ] && . ~/kerl/20.1/activate
+
+# kiex
+[ -r "$HOME/.kiex/scripts/kiex" ] && . "$HOME/.kiex/scripts/kiex"
+
+[ -r "$HOME/.kiex/elixirs/.default" ] && . "$HOME/.kiex/elixirs/.default"
+
+[ -s "$HOME/.dnx/dnvm/dnvm.sh" ] && . "$HOME/.dnx/dnvm/dnvm.sh" # Load dnvm
+
+[ -s "$HOME/.scm_breeze/scm_breeze.sh" ] && source "$HOME/.scm_breeze/scm_breeze.sh"
+
+[ -s "$HOME/.zsh/highlighting/zsh-syntax-highlighting.zsh" ] && source "$HOME/.zsh/highlighting/zsh-syntax-highlighting.zsh"
+
+[ -s "$HOME/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh" ] && source "$HOME/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh"
+
+[ -r "$HOME/.zsh/zsh-completion/" ] && \
+    [[ $fpath != *".zsh/zsh-completion"* ]] && \
+    fpath=($fpath "$HOME/.zsh/zsh-completion")
+
+[ -r "$HOME/.zsh/zsh-completions/src/" ] && \
+    [[ $fpath != *".zsh/zsh-completions/src"* ]] && \
+    fpath=($fpath "$HOME/.zsh/zsh-completions/src/")
+
+[ -r "/usr/share/fzf/key-bindings.zsh" ] && \
+    . "/usr/share/fzf/key-bindings.zsh" && \
+    export FZF_DEFAULT_COMMAND='rg --files --no-ignore --hidden --follow -g "!{.git,node_modules}/*" 2> /dev/null' && \
+    export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+
+function sf () {
+    if [ "$#" -lt 1 ]; then echo "Supply string to search for!"; return 1; fi
+    printf -v search "%q" "$*"
+    include="yml,js,json,php,md,styl,pug,jade,html,config,py,cpp,c,go,hs,rb,conf,fa,lst,erl,ex,exs,pl,pm,config,conf,src"
+    exclude=".config,.git,node_modules,vendor,build,yarn.lock,*.sty,*.bst,*.coffee,dist"
+    rg_command='rg --column --line-number --no-heading --fixed-strings --ignore-case --no-ignore --hidden --follow --color "always" -g "*.{'$include'}" -g "!{'$exclude'}/*"'
+    files=`eval $rg_command $search | fzf --ansi --multi --reverse | awk -F ':' '{print "+"$2":"$3" "$1}'`
+    [[ -n "$files" ]] && $EDIT $files
+}
+
+function sfe () {
+    if [ "$#" -lt 1 ]; then echo "Supply string to search for!"; return 1; fi
+    printf -v search "%q" "$*"
+    rg_command='rg --column --line-number --no-heading --ignore-case --no-ignore --hidden --follow --color "always"'
+    files=`eval $rg_command $search | fzf --ansi --multi --reverse | awk -F ':' '{print "+"$2":"$3" "$1}'`
+    echo "$EDIT $files \$"
+    $EDIT $files
+    # [[ -n "$files" ]] && $EDIT $files
+}
+
+AUTH_SOCK_LINK="$HOME/.ssh/auth_sock.$HOST"
+AUTH_SOCK_LINKED=$(readlink "$AUTH_SOCK_LINK")
+if ([ -z "$AUTH_SOCK_LINKED" ] || [ ! -S "$AUTH_SOCK_LINKED" ]) && [ -n "$SSH_AUTH_SOCK" ]; then
+    ln -sf "$SSH_AUTH_SOCK" "$AUTH_SOCK_LINK"
+fi
+export SSH_AUTH_SOCK="$AUTH_SOCK_LINK"
+unset AUTH_SOCK_LINK
+unset AUTH_SOCK_LINKED
+
+view_cert() {
+    readonly host=${1:?"The host must be specified."}
+    readonly port=${2:-"443"}
+    echo certificate at $host:$port
+    openssl s_client -CApath /etc/ssl/certs/ -showcerts -servername $host -connect $host:$port </dev/null | openssl x509 -text
+}
+
+# OPAM configuration
+. $HOME/.opam/opam-init/init.zsh > /dev/null 2> /dev/null || true
+
+# asdf
+[ -r "$HOME/.asdf/asdf.sh" ] && . $HOME/.asdf/asdf.sh
+# . $HOME/.asdf/plugins/java/asdf-java-wrapper.zsh
+[ -r "$HOME/.asdf/completions/asdf.bash" ] && . $HOME/.asdf/completions/asdf.bash
+# The following lines were added by compinstall
+
+zstyle ':completion:*' completer _complete _ignored
+zstyle ':completion:*' list-colors ''
+zstyle ':completion:*' matcher-list 'm:{[:lower:]}={[:upper:]}' 'r:|[._-]=** r:|=**' 'l:|=* r:|=*'
+zstyle :compinstall filename "$HOME/.zshrc"
+
+autoload -Uz compinit
+compinit
+# End of lines added by compinstall
+
+autoload -Uz run-help
+(( ${+aliases[run-help]} )) && unalias run-help
+alias help=run-help
+
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh

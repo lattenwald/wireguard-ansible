@@ -1,0 +1,23 @@
+[Unit]
+Description=Prometheus WireGuard Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=root
+Type=simple
+Restart=on-failure
+# EnvironmentFile=-/etc/conf.d/prometheus-wireguard-exporter
+# ExecStart=/usr/local/bin/prometheus-wireguard-exporter $WIREGUARD_EXPORTER_ARGS
+ExecStart=/usr/local/bin/prometheus_wireguard_exporter --address=127.0.0.1 --extract_names_config_files=/etc/wireguard/wg0.conf --interfaces=wg0
+PrivateTmp=yes
+ProtectHome=yes
+ProtectControlGroups=yes
+UMask=077
+RemoveIPC=yes
+BindReadOnlyPaths=/dev/log /run/systemd/journal/socket /run/systemd/journal/stdout
+ProtectSystem=strict
+ProtectProc=noaccess
+
+[Install]
+WantedBy=multi-user.target

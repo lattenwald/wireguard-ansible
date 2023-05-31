@@ -1,0 +1,120 @@
+- name: prometheus
+  hosts: all
+  become_method: sudo
+
+  tasks:
+    - name: check if grafana repo is present
+      stat:
+        path: /etc/apt/sources.list.d/grafana.list
+      register: grafana_repo
+
+    - name: install grafana repo
+      when: not grafana_repo.stat.exists
+      block:
+        - name: fetch key
+          become: yes
+          shell:
+            cmd: "wget -q -O - https://packages.grafana.com/gpg.key | gpg --dearmor | tee /usr/share/keyrings/grafana.gpg > /dev/null"
+            creates: /usr/share/keyrings/grafana.gpg
+
+        - name: install repo
+          become: yes
+          copy:
+            src: files/prometheus/grafana.list
+            dest: /etc/apt/sources.list.d/grafana.list
+
+    - name: install grafana and prometheus
+      become: yes
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: true
+      loop:
+        - prometheus
+        - prometheus-node-exporter
+        - grafana
+
+    - name: check if prometheus_wireguard_exporter present
+      stat:
+        path: /usr/local/bin/prometheus_wireguard_exporter
+      register: prometheus_wireguard_exporter
+
+    - name: prometheus wireguard exporter
+      when: not prometheus_wireguard_exporter.stat.exists
+      block:
+        - name: install rust
+          become: yes
+          apt:
+            name: rust-all
+            state: present
+
+        - name: sources
+          git:
+            repo: https://github.com/MindFlavor/prometheus_wireguard_exporter.git
+            dest: /home/user/prometheus_wireguard_exporter
+            recursive: yes
+
+        - name: build
+          shell:
+            chdir: /home/user/prometheus_wireguard_exporter
+            cmd: cargo build -r
+
+        - name: install prometheus_wireguard_exporter
+          become: yes
+          copy:
+            remote_src: true
+            src: /home/user/prometheus_wireguard_exporter/target/release/prometheus_wireguard_exporter
+            dest: /usr/local/bin/prometheus_wireguard_exporter
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: install prometheus-wireguard-exporter.service
+          become: yes
+          copy:
+            src: files/prometheus/prometheus-wireguard-exporter.service
+            dest: /etc/systemd/system/prometheus-wireguard-exporter.service
+
+        - name: reload systemd
+          become: yes
+          systemd:
+            daemon-reload: true
+
+    - name: prometheus config
+      become: yes
+      copy:
+        src: files/prometheus/prometheus.yml
+        dest: /etc/prometheus/prometheus.yml
+
+    - name: grafana config
+      become: yes
+      template:
+        src: files/prometheus/grafana.ini.tmpl
+        dest: /etc/grafana/grafana.ini
+        backup: true
+        owner: root
+        group: grafana
+        mode: '0640'
+
+    - name: enable and (re)start stuff
+      become: yes
+      systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: restarted
+      loop:
+        - prometheus-node-exporter
+        - prometheus-wireguard-exporter
+        - prometheus
+        - grafana-server
+
+    - name: nginx stuff
+      include_tasks: nginx_site.yaml.ansible
+      vars:
+        full_domain: "stats.{{ domain }}"
+        upstream_name: grafana
+        upstream_port: 3765
+
+    - name: more steps needed
+      debug:
+        msg: "Visit https://stats.{{ domain }} and set up prometheus data source at http://localhost:9090, then import dashboard json; don't forget to log in and run apt update, apt upgrade"

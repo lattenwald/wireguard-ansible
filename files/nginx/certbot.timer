@@ -1,0 +1,9 @@
+[Unit]
+Description=Run certbot weekly and on boot
+
+[Timer]
+OnBootSec=70min
+OnUnitActiveSec=1w
+
+[Install]
+WantedBy=timers.target

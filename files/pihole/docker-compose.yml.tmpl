@@ -1,0 +1,26 @@
+version: "3.0"
+
+services:
+    proxy:
+        image: pihole/pihole:latest
+        container_name: pihole
+        hostname: pi.hole
+        cap_add:
+            - NET_ADMIN
+        dns:
+            - 127.0.0.1
+            - 1.1.1.1
+        environment:
+            TZ: "Europe/Moscow"
+            VIRTUAL_HOST: "pi.hole"
+            PROXY_LOCATION: "pi.hole"
+            ServerIP: "127.0.0.1"
+            WEBPASSWORD: "{{ pihole_password }}"
+        ports:
+            - "{{ address }}:53:53/tcp"
+            - "{{ address }}:53:53/udp"
+            - "127.0.0.1:2020:80"
+            - "{{ address }}:2023:443"
+        volumes:
+            - /home/user/compose/pihole/data/pihole:/etc/pihole:rw
+            - /home/user/compose/pihole/data/dnsmasq.d:/etc/dnsmasq.d:rw

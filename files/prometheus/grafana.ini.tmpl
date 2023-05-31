@@ -1,0 +1,12 @@
+[server]
+http_addr = 127.0.0.1
+http_port = 3765
+
+root_url = https://stats.{{ domain }}:443
+
+[security]
+admin_user = {{ grafana_user }}
+admin_password = {{ grafana_password }}
+
+[users]
+allow_sign_up = false

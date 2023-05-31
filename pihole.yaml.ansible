@@ -1,0 +1,59 @@
+- name: pihole
+  hosts: all
+  become_method: sudo
+
+  tasks:
+    - name: directories structure
+      file:
+        path: /home/user/compose/pihole/data
+        state: directory
+        recurse: yes
+
+    - name: docker-compose.yml
+      template:
+        src: files/pihole/docker-compose.yml.tmpl
+        dest: /home/user/compose/pihole/docker-compose.yml
+
+    - name: docker-pull-restart script
+      become: yes
+      copy:
+        src: files/docker-pull-restart.sh
+        dest: /usr/local/bin/docker-pull-restart.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: pihole systemd files
+      become: yes
+      copy:
+        src: "files/pihole/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+      loop:
+        - pihole.service
+        - pihole-pull.service
+        - pihole-pull.timer
+
+    - name: enable stuff
+      become: yes
+      systemd:
+        daemon-reload: true
+        name: "{{ item }}"
+        enabled: true
+      loop:
+        - pihole-pull.timer
+        - pihole
+
+    - name: (re)start stuff
+      become: yes
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - pihole
+
+    - name: nginx stuff
+      include_tasks: nginx_site.yaml.ansible
+      vars:
+        full_domain: "ph.{{ domain }}"
+        upstream_name: pihole
+        upstream_port: 3765

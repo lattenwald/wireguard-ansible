@@ -1,0 +1,26 @@
+#!/bin/bash
+
+usage() {
+    echo "Usage: $0 [-m parse_mode] [-c chat_id] [-t bot_token] [-p message_prefix] text"
+    exit 1
+}
+
+while getopts ":hm:c:t:p:" opt; do
+    case "${opt}" in
+        h) usage ;;
+        m) mode="$OPTARG" ;;
+        c) chat_id="$OPTARG" ;;
+        t) token="$OPTARG" ;;
+        p) prefix="$OPTARG" ;;
+    esac
+done
+shift $(($OPTIND - 1))
+
+mode=${mode:-HTML} # or Markdown
+chat_id=${chat_id:-"{{ chat_id | trim }}"}
+prefix=${prefix:-"{{ prefix }}: "}
+token=${token:-"{{ bot_token | trim }}"}
+
+curl --data-urlencode "parse_mode=$mode" --data-urlencode "chat_id=$chat_id" --data-urlencode "text=$prefix$1" "https://api.telegram.org/bot$token/sendMessage"
+
+exit 0

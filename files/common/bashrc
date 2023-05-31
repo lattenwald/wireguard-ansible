@@ -1,0 +1,207 @@
+# -*- shell-script -*-
+# ~/.bashrc: executed by bash(1) for non-login shells.
+# see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
+# for examples
+
+# If not running interactively, don't do anything
+[ -z "$PS1" ] && return
+
+# History {{{
+# don't put duplicate lines in the history. See bash(1) for more options
+# don't overwrite GNU Midnight Commander's setting of `ignorespace'.
+# export HISTCONTROL=$HISTCONTROL${HISTCONTROL+,}ignoredups
+# ... or force ignoredups and ignorespace
+export HISTCONTROL=ignoreboth
+
+# append to the history file, don't overwrite it
+shopt -s histappend
+
+# for setting history length see HISTSIZE and HISTFILESIZE in bash(1)
+
+# check the window size after each command and, if necessary,
+# update the values of LINES and COLUMNS.
+shopt -s checkwinsize
+#}}}
+
+# prompt {{{
+export GIT_PS1_SHOWDIRTYSTATE=1
+export GIT_PS1_SHOWUPSTREAM=1
+if [ -r $HOME/.bash/git-prompt.sh ]; then
+    source $HOME/.bash/git-prompt.sh
+    PS1='\e[0m\t \[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00;34m\]$(__git_ps1 " [%s]")\[\033[00m\]\n\$ '
+else
+    PS1='\e[0m\t \[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\n\$ '
+fi
+#}}}
+
+stty erase '^?'
+
+# aliases {{{
+# enable color support of ls and also add handy aliases
+if [ -x /usr/bin/dircolors ] || [ -x /bin/dircolors ]; then
+    eval "`dircolors -b`"
+    if [ `ls --version | head -1 | awk '{if ($NF > 8) print "ok"; else exit 1}'` ]; then
+      alias ls='ls --group-directories-first --color=auto'
+    else
+      alias ls='ls --color=auto'
+    fi
+    alias dir='dir --color=auto'
+    alias vdir='vdir --color=auto'
+
+    alias grep='grep --color=auto'
+    alias fgrep='fgrep --color=auto'
+    alias egrep='egrep --color=auto'
+fi
+
+# other aliases
+alias ls='ls --color=auto --group-directories-first'
+alias ll='ls -l'
+alias la='ls -A'
+alias l='ls -CF'
+#}}}
+
+# misc env vars {{{
+export RSYNC_RSH=ssh
+export XDG_DATA_HOME=$HOME/.config
+which nvim >/dev/null && export EDITOR=nvim || export EDITOR=vim
+# Predictable SSH authentication socket location.
+SOCK="/tmp/ssh-agent-$USER-screen"
+if test $SSH_AUTH_SOCK && [ $SSH_AUTH_SOCK != $SOCK ]
+then
+    rm -f /tmp/ssh-agent-$USER-screen
+    ln -sf $SSH_AUTH_SOCK $SOCK
+    export SSH_AUTH_SOCK=$SOCK
+fi
+
+#}}}
+
+
+# misc functions {{{
+function setperms()
+{
+    find . -type d -exec chmod $1 {} \;
+    find . -type f -exec chmod $2 {} \;
+}
+
+function tmux()
+{
+    TERM=xterm-256color $(which tmux) $@
+}
+#}}}
+
+# SVN helper functions and stuff {{{
+function svndiff()
+{
+    svn diff "${@}" | colordiff | less -R
+}
+
+function svnwdiff()
+{
+    svn diff "${@}" | dwdiff --color=bred,bblue --diff-input | less -R
+}
+
+function svncdiff()
+{
+    svn diff --diff-cmd diffwrap.sh "${@}" | colordiff | less -R
+}
+export SVN_MERGE=kdiff3svnmerge
+#}}}
+
+# $PATH {{{
+[ -d /snap/bin ] && PATH=$PATH:/snap/bin
+[ -d $HOME/.local/bin ] && PATH=$PATH:$HOME/.local/bin
+[ -d $HOME/local/bin ] && PATH=$PATH:$HOME/local/bin
+[ -d $HOME/cabal/bin ] && PATH=$HOME/cabal/bin:$PATH
+[ -d $HOME/.cabal/bin ] && PATH=$HOME/.cabal/bin:$PATH
+[ -d $HOME/bin ] && PATH=$PATH:$HOME/bin
+[ -d $HOME/.bin ] && PATH=$PATH:$HOME/.bin
+[ -d /usr/lib/smlnj/bin ] && PATH=$PATH:/usr/lib/smlnj/bin
+export PATH
+#}}}
+
+# locale {{{
+#export LANG=ru_RU.UTF-8
+# export LC_ALL=ru_RU.UTF-8
+# export LC_MESSAGES=C
+#}}}
+
+# local settings {{{
+[ -r ~/.bashrc.local ] && . ~/.bashrc.local
+# }}}
+
+# ghc-pkg {{{
+
+# unregister broken GHC packages. Run this a few times to resolve dependency rot in installed packages.
+# ghc-pkg-clean -f cabal/dev/packages*.conf also works.
+function ghc-pkg-clean() {
+    for p in `ghc-pkg check $* 2>&1  | grep problems | awk '{print $6}' | sed -e 's/:$//'`
+    do
+        echo unregistering $p; ghc-pkg $* unregister $p
+    done
+}
+
+# remove all installed GHC/cabal packages, leaving ~/.cabal binaries and docs in place.
+# When all else fails, use this to get out of dependency hell and start over.
+function ghc-pkg-reset() {
+    read -p 'erasing all your user ghc and cabal packages - are you sure (y/n) ? ' ans
+    test x$ans == xy && ( \
+        echo 'erasing directories under ~/.ghc'; rm -rf `find ~/.ghc -maxdepth 1 -type d`; \
+        echo 'erasing ~/.cabal/lib'; rm -rf ~/.cabal/lib; \
+        # echo 'erasing ~/.cabal/packages'; rm -rf ~/.cabal/packages; \
+        # echo 'erasing ~/.cabal/share'; rm -rf ~/.cabal/share; \
+        )
+}
+# }}}
+
+say() {
+    if [[ "${1}" =~ -[a-z]{2} ]]
+    then
+        local lang=${1#-}
+        local text="${*#$1}"
+    else
+        local lang=${LANG%_*}
+        local text="$*"
+    fi
+    mplayer "http://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&q=${text}" &> /dev/null
+}
+
+mpd_pause_after_current() {
+    sleep $(mpc | awk -F"[ /:]" '/playing/ {print 60*($8-$6)+$9-$7}');mpc pause
+}
+
+umask 0022
+
+[[ -x /usr/bin/unicode_start && $(tty) = /dev/tty? ]] && unicode_start Cyr_a8x16
+
+screen_set_window_title () {
+    local HPWD="$PWD"
+    case $HPWD in
+        $HOME) HPWD="~";;
+
+
+        ## long name option:
+        # $HOME/*) HPWD="~${HPWD#$HOME}";;
+
+
+        ## short name option:
+        *) HPWD=`basename "$HPWD"`;;
+
+
+    esac
+    printf '\ek%s\e\\' "$HPWD"
+}
+if [[ $TERM =~ 'screen' ]]; then
+    PROMPT_COMMAND="screen_set_window_title"
+fi
+
+export GTK_IM_MODULE=ibus
+export XMODIFIERS=@im=ibus
+export QT_IM_MODULE=ibus
+
+
+# vim:set noet sw=2 ts=2 fdm=marker:
+
+[ -s "$HOME/.scm_breeze/scm_breeze.sh" ] && source "$HOME/.scm_breeze/scm_breeze.sh"
+
+[ -f ~/.fzf.bash ] && source ~/.fzf.bash
+[ -f ~/.cargo/env] && source ~/.cargo/env

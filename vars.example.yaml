@@ -1,0 +1,12 @@
+domain: DNS-resolvable hostname for nginx and wireguard (like mydomain.org)
+address: internal address for wireguard and pihole (like 10.5.2.1)
+prefix: short message prefix for tgnotify script (like wg)
+email: e-mail for letsencrypt (like me@gmail.com)
+digitalocean_token: digitalocean token for letsencrypt certbot
+bot_token: telegram bot token for tgnotify (get from t.me/BotFather)
+chat_id: telegram chat id for tgnotify (start chat with your bot first, with /start command)
+pihole_password: web password for pihole
+htpasswd_user:
+htpasswd_password: user and password for basic auth
+grafana_user:
+grafana_password: admin user and password for grafana

@@ -1,0 +1,8 @@
+[Interface]
+PrivateKey = {{ private_key.content | b64decode | trim }}
+Address = {{ address }}/24
+ListenPort = 61951
+
+PostUp = iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o {{ interface }} -j MASQUERADE
+PostDown = iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o {{ interface }} -j MASQUERADE
+

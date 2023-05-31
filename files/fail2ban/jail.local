@@ -1,0 +1,19 @@
+[DEFAULT]
+ignoreip =  127.0.0.1/8 ::1 109.252.110.64/24 207.154.203.82/32 172.104.142.122/32
+
+[sshd]
+enabled = true
+port    = ssh
+logpath = %(sshd_log)s
+backend = %(sshd_backend)s
+
+[nginx-http-auth]
+enabled = true
+port    = http,https
+logpath = %(nginx_error_log)s
+
+[nginx-botsearch]
+enabled = true
+port     = http,https
+logpath  = %(nginx_error_log)s
+maxretry = 2

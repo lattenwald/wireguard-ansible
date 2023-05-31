@@ -1,0 +1,9 @@
+[Interface]
+PrivateKey = {PrivateKey}
+Address = {ClientAddress}/32
+DNS = {{ address }}
+
+[Peer]
+PublicKey = {{ public_key.content | b64decode | trim }}
+AllowedIPs = 0.0.0.0/0
+Endpoint = {{ domain }}:61951

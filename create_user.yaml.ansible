@@ -1,0 +1,27 @@
+- name: create user
+  hosts: all
+  tasks:
+    - name: create group
+      group:
+        name: user
+        state: present
+
+    - name: create user
+      user:
+        name: user
+        group: user
+        groups: [systemd-journal]
+
+    - name: sudoers
+      community.general.sudoers:
+        name: user-nopasswd
+        user: user
+        commands: ALL
+        nopassword: true
+
+    - name: ssh keys
+      ansible.posix.authorized_key:
+        user: user
+        state: present
+        key: "{{ lookup('file', item) }}"
+      with_fileglob: 'files/ssh_key_*'

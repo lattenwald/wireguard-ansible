@@ -1,0 +1,17 @@
+typeset -U path
+# $PATH {{{
+_paths=("/snap/bin" "/usr/local/sbin" "$HOME/.local/bin" "$HOME/local/bin" "$HOME/.bin" "$HOME/bin" \
+        "/usr/lib/smlnj/bin" "/usr/local/lib/node_modules/purescript/vendor" "$HOME/.cabal/bin" \
+        "$HOME/.cargo/bin" "/opt/telegram/bin" "$HOME/.node_modules/bin")
+
+for _dir in $_paths; do
+    if [[ -z "${path[(r)$_dir]}" ]]; then
+        path+=( $_dir )
+    fi
+done
+
+unset _paths
+
+export npm_config_prefix=~/.node_modules
+#}}}
+

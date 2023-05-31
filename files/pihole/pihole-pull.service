@@ -1,0 +1,11 @@
+[Unit]
+Description=Pull pihole docker image
+After=docker.service
+
+[Service]
+User=user
+ExecStart=/usr/local/bin/docker-pull-restart.sh pihole/pihole:latest pihole.service
+ExecStartPost=/usr/local/bin/tgnotify "starting %n"
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+- name: all
+  hosts: all
+
+- name: run common
+  import_playbook: common.yaml.ansible
+
+- name: run tgnotify
+  import_playbook: tgnotify.yaml.ansible
+
+- name: run fail2ban
+  import_playbook: fail2ban.yaml.ansible
+
+- name: run nginx
+  import_playbook: nginx.yaml.ansible
+
+- name: run wireguard
+  import_playbook: wireguard.yaml.ansible
+
+- name: run pihole
+  import_playbook: pihole.yaml.ansible
+
+- name: run prometheus
+  import_playbook: prometheus.yaml.ansible

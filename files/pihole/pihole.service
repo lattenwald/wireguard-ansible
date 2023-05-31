@@ -1,0 +1,17 @@
+[Unit]
+Description=PiHole
+OnFailure=failure-tg@%i.service
+Requires=docker.service
+After=docker.service
+
+[Service]
+User=user
+Restart=always
+RestartSec=3
+WorkingDirectory=/home/user/compose/pihole
+ExecStart=/usr/bin/docker-compose up
+ExecStartPost=/usr/local/bin/tgnotify -m HTML -- "starting %n"
+
+[Install]
+WantedBy=multi-user.target
+After=wg-quick@wg0.service

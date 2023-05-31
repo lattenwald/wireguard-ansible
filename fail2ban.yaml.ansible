@@ -1,0 +1,23 @@
+- name: fail2ban
+  hosts: all
+  become_method: sudo
+
+  tasks:
+    - name: install
+      become: yes
+      apt:
+        name: fail2ban
+        state: present
+
+    - name: config
+      become: yes
+      copy:
+        src: files/fail2ban/jail.local
+        dest: /etc/fail2ban/jail.local
+
+    - name: enable and (re)start
+      become: yes
+      systemd:
+        name: fail2ban
+        enabled: true
+        state: restarted

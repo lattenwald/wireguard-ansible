@@ -1,0 +1,125 @@
+- name: wireguard
+  hosts: all
+  become_method: sudo
+
+  tasks:
+    - name: install wireguard
+      become: yes
+      apt:
+        name: '{{ item }}'
+        state: present
+      loop:
+        - wireguard-tools
+        - wireguard-dkms
+        - perl
+        - qrencode
+
+    - name: install wg.pl script
+      become: yes
+      copy:
+        src: files/wireguard/wg.pl
+        dest: /usr/local/bin/wg.pl
+        owner: root
+        group: root
+        mode: '0744'
+
+    - name: check if private key exists
+      become: yes
+      stat:
+        path: /etc/wireguard/server_private.key
+      register: private_key_file
+
+    - name: generate server keys
+      become: yes
+      when: not private_key_file.stat.exists
+      shell:
+        cmd: '{{ item }}'
+      loop:
+        - 'umask 077 && wg genkey > /etc/wireguard/server_private.key'
+        - 'umask 077 && wg pubkey < /etc/wireguard/server_private.key > /etc/wireguard/server_public.key'
+
+    - name: get server private key
+      become: yes
+      slurp:
+        src: /etc/wireguard/server_private.key
+      register: private_key
+
+    - name: get server public key
+      become: yes
+      slurp:
+        src: /etc/wireguard/server_public.key
+      register: public_key
+
+    - name: determine external interface
+      shell:
+        cmd: 'ip route | grep default | grep -Po "(?<=dev )\S*"'
+      register: cmd_interface
+
+    - name: set external interface variable
+      set_fact:
+        interface: "{{ cmd_interface.stdout | trim }}"
+
+    - name: install wg0.conf
+      become: yes
+      template:
+        src: files/wireguard/wg0.conf.tmpl
+        dest: /etc/wireguard/wg0.conf
+        owner: root
+        group: root
+        mode: '0600'
+        backup: true
+
+    - name: install server.tmpl
+      become: yes
+      copy:
+        src: files/wireguard/server.tmpl
+        dest: /etc/wireguard/server.tmpl
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: install client.tmpl
+      become: yes
+      template:
+        src: files/wireguard/client.tmpl
+        dest: /etc/wireguard/client.tmpl
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: clients directory exists
+      become: yes
+      file:
+        path: /etc/wireguard/clients
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: start and enable wireguard
+      become: yes
+      systemd:
+        name: wg-quick@wg0
+        enabled: true
+        state: restarted
+
+    - name: ufw
+      become: yes
+      command:
+        cmd: "ufw allow 61951"
+
+    - name: ufw before-rules
+      become: yes
+      blockinfile:
+        path: /etc/ufw/before.rules
+        backup: true
+        block: |
+          *nat
+          :POSTROUTING ACCEPT [0:0]
+          -A POSTROUTING -s 10.0.0.0/24 -o {{ interface }} -j MASQUERADE
+          COMMIT
+
+    - name: reload ufw
+      become: yes
+      command:
+        cmd: ufw reload

@@ -1,0 +1,157 @@
+- name: nginx
+  hosts: all
+  become_method: sudo
+
+  tasks:
+    - name: install stuff
+      become: yes
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - nginx-full
+        - python3-passlib
+        - certbot
+        - python3-certbot-dns-digitalocean
+
+    - name: default site
+      become: yes
+      copy:
+        src: files/nginx/default
+        dest: /etc/nginx/sites-available/default
+        owner: root
+        group: www-data
+        mode: '0644'
+
+    - name: enable default site
+      become: yes
+      file:
+        src: /etc/nginx/sites-available/default
+        dest: /etc/nginx/sites-enabled/default
+        state: link
+        owner: root
+        group: www-data
+        mode: '0644'
+
+    - name: enable default index.html
+      become: yes
+      file:
+        src: /var/www/html/index.nginx-debian.html
+        dest: /var/www/html/index.html
+        state: link
+        owner: root
+        group: www-data
+        mode: '0644'
+
+    - name: create dhparam.pem
+      become: yes
+      command:
+        cmd: /usr/bin/openssl dhparam -out /etc/ssl/certs/dhparam.pem 4096
+        creates: /etc/ssl/certs/dhparam.pem
+
+    - name: htpasswd
+      become: yes
+      community.general.htpasswd:
+        path: /etc/nginx/common.htpasswd
+        name: "{{ htpasswd_user }}"
+        password: "{{ htpasswd_password }}"
+        owner: root
+        group: www-data
+        mode: '0640'
+
+    - name: "Create required directories in /etc/letsencrypt"
+      become: yes
+      file:
+        path: "/etc/letsencrypt/{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - account
+        - certs
+        - csrs
+        - keys
+
+    - name: Install credentials
+      become: yes
+      template:
+        src: files/nginx/digitalocean.ini.tmpl
+        dest: /etc/letsencrypt/digitalocean.ini
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: request certificate
+      become: yes
+      expect:
+        command: "certbot certonly --dns-digitalocean --dns-digitalocean-credentials /etc/letsencrypt/digitalocean.ini -d {{ domain }}"
+        responses:
+          "email address": "{{ email }}"
+          "Terms of Service": "y"
+          "share your email address": "n"
+          "Keep the existing": "1"
+
+    - name: nginx ssl params for domain
+      become: yes
+      template:
+        src: files/nginx/ssl-domain.conf.tmpl
+        dest: /etc/nginx/snippets/ssl-domain.conf
+        owner: root
+        group: www-data
+        mode: '0640'
+
+    - name: nginx common ssl params
+      become: yes
+      copy:
+        src: files/nginx/ssl-params.conf
+        dest: /etc/nginx/snippets/ssl-params.conf
+        owner: root
+        group: www-data
+        mode: '0640'
+
+    - name: install cert update service and timer
+      become: yes
+      copy:
+        src: "files/nginx/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - certbot.service
+        - certbot.timer
+
+    - name: enable stuff
+      become: yes
+      systemd:
+        daemon-reload: true
+        name: "{{ item }}"
+        enabled: true
+      loop:
+        - certbot.timer
+        - nginx
+
+    - name: enable and restart nginx
+      become: yes
+      systemd:
+        name: nginx
+        enabled: true
+
+    - name: (re)start stuff
+      become: yes
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - certbot
+        - nginx
+
+    - name: ufw
+      become: yes
+      command:
+        cmd: "ufw allow {{ item }}"
+      loop:
+        - 22
+        - 80
+        - 443

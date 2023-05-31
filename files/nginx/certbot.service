@@ -1,0 +1,11 @@
+[Unit]
+Description=certbot
+Requires=docker.service
+After=docker.service
+
+[Service]
+ExecStart=/usr/bin/certbot renew --dns-digitalocean --dns-digitalocean-credentials /etc/letsencrypt/digitalocean.ini
+ExecStartPost=/bin/systemctl reload nginx
+
+[Install]
+WantedBy=multi-user.target

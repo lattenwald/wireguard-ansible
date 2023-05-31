@@ -1,0 +1,82 @@
+- name: common stuff
+  hosts: all
+  become_method: sudo
+
+  tasks:
+    - name: install stuff
+      become: yes
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: true
+      loop:
+        - bash
+        - zsh
+        - tmux
+        - neovim
+        - ncdu
+        - tree
+        - htop
+        - docker
+        - docker-compose
+        - ufw
+
+    - name: ufw
+      become: yes
+      command:
+        cmd: ufw allow 22
+
+    - name: copy config files
+      copy:
+        src: "files/common/{{ item.from }}"
+        dest: "~/{{ item.to }}"
+      loop:
+        - { from: bashrc, to: .bashrc }
+        - { from: profile, to: .profile }
+        - { from: zshrc, to: .zshrc }
+        - { from: zshenv, to: .zshenv }
+        - { from: zprofile, to: .zprofile }
+        - { from: tmux.conf, to: .tmux.conf }
+
+    - name: copy config files for root
+      become: yes
+      copy:
+        src: "files/common/{{ item.from }}"
+        dest: "/root/{{ item.to }}"
+      loop:
+        - { from: bashrc, to: .bashrc }
+        - { from: zshrc, to: .zshrc }
+        - { from: zshenv, to: .zshenv }
+
+    - name: tmux plugin manager
+      git:
+        repo: https://github.com/tmux-plugins/tpm
+        dest: ~/.tmux/plugins/tpm
+
+    - name: setup user
+      become: yes
+      user:
+        name: user
+        shell: /bin/zsh
+        append: true
+        groups: [docker]
+
+    - name: stop docker
+      become: yes
+      systemd:
+        name: docker
+        state: stopped
+
+    - name: install daemon.json
+      become: yes
+      copy:
+        src: files/docker-daemon.json
+        dest: /etc/docker/daemon.json
+        owner: root
+        group: root
+
+    - name: start docker
+      become: yes
+      systemd:
+        name: docker
+        state: started
